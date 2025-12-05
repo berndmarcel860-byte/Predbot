@@ -42,7 +42,7 @@ class TestConfig:
         reload(config)
         
         # With telegram disabled, only binance keys needed
-        assert config.Config.validate() == True
+        assert config.Config.validate()
     
     def test_thresholds_are_numbers(self):
         """Test that thresholds are numeric."""

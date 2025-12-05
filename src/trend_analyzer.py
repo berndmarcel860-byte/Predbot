@@ -22,12 +22,12 @@ class TrendAnalyzer:
     
     TIMEFRAME_WEIGHTS = {
         '1m': 0.05,
-        '5m': 0.10,
-        '15m': 0.15,
-        '30m': 0.15,
-        '1h': 0.20,
+        '5m': 0.15,
+        '15m': 0.20,
+        '30m': 0.10,
+        '1h': 0.25,
         '4h': 0.20,
-        '1d': 0.15
+        '1d': 0.05
     }
     
     def __init__(self, confirmation_threshold: float = 0.7):

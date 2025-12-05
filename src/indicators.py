@@ -267,10 +267,17 @@ class TechnicalIndicators:
             obv = indicators['obv']
             obv_sma = obv.rolling(window=20).mean()
             
-            if obv.iloc[-1] > obv_sma.iloc[-1]:
-                signals['obv'] = 1  # Volume supporting upward move
-            elif obv.iloc[-1] < obv_sma.iloc[-1]:
-                signals['obv'] = -1  # Volume supporting downward move
+            # Check for NaN values before comparison
+            obv_last = obv.iloc[-1]
+            obv_sma_last = obv_sma.iloc[-1]
+            
+            if pd.notna(obv_last) and pd.notna(obv_sma_last):
+                if obv_last > obv_sma_last:
+                    signals['obv'] = 1  # Volume supporting upward move
+                elif obv_last < obv_sma_last:
+                    signals['obv'] = -1  # Volume supporting downward move
+                else:
+                    signals['obv'] = 0
             else:
                 signals['obv'] = 0
             

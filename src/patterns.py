@@ -59,8 +59,9 @@ class ChartPatterns:
             
             if price_diff <= tolerance:
                 # Find the valley between peaks
-                valley_idx = df['low'].iloc[peak1_idx:peak2_idx].idxmin()
-                if valley_idx is not None:
+                valley_slice = df['low'].iloc[peak1_idx:peak2_idx]
+                if len(valley_slice) > 0:
+                    valley_idx = valley_slice.idxmin()
                     current_price = df['close'].iloc[-1]
                     # Pattern confirmed if price breaks below valley
                     valley_price = df['low'].loc[valley_idx]
@@ -103,8 +104,9 @@ class ChartPatterns:
             
             if price_diff <= tolerance:
                 # Find the peak between troughs
-                peak_idx = df['high'].iloc[trough1_idx:trough2_idx].idxmax()
-                if peak_idx is not None:
+                peak_slice = df['high'].iloc[trough1_idx:trough2_idx]
+                if len(peak_slice) > 0:
+                    peak_idx = peak_slice.idxmax()
                     current_price = df['close'].iloc[-1]
                     peak_price = df['high'].loc[peak_idx]
                     
