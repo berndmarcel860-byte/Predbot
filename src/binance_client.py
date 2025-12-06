@@ -4,7 +4,7 @@ Handles all interactions with Binance Futures API.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import pandas as pd
@@ -15,13 +15,81 @@ logger = logging.getLogger(__name__)
 class BinanceClient:
     """Binance Futures API client wrapper."""
     
-    def __init__(self, api_key: str, api_secret: str):
-        """Initialize the Binance client."""
+    def __init__(self, api_key: str, api_secret: str, leverage: int = 20, margin_type: str = "CROSSED"):
+        """
+        Initialize the Binance client.
+        
+        Args:
+            api_key: Binance API key
+            api_secret: Binance API secret
+            leverage: Leverage multiplier (default: 20x)
+            margin_type: Margin type - "CROSSED" or "ISOLATED" (default: CROSSED)
+        """
         self.client = Client(api_key, api_secret)
         self.client.futures_ping()  # Test connection
-        logger.info("Connected to Binance Futures API")
+        self.leverage = leverage
+        self.margin_type = margin_type
+        logger.info(f"Connected to Binance Futures API (Leverage: {leverage}x, Margin: {margin_type})")
     
-    def get_futures_symbols(self) -> list[str]:
+    def set_leverage(self, symbol: str, leverage: int = None) -> bool:
+        """
+        Set leverage for a symbol.
+        
+        Args:
+            symbol: Trading pair (e.g., 'BTCUSDT')
+            leverage: Leverage multiplier (uses instance default if not provided)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            lev = leverage or self.leverage
+            self.client.futures_change_leverage(symbol=symbol, leverage=lev)
+            logger.info(f"Set leverage for {symbol} to {lev}x")
+            return True
+        except BinanceAPIException as e:
+            logger.error(f"Failed to set leverage for {symbol}: {e}")
+            return False
+    
+    def set_margin_type(self, symbol: str, margin_type: str = None) -> bool:
+        """
+        Set margin type for a symbol.
+        
+        Args:
+            symbol: Trading pair (e.g., 'BTCUSDT')
+            margin_type: "CROSSED" or "ISOLATED" (uses instance default if not provided)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            mt = margin_type or self.margin_type
+            self.client.futures_change_margin_type(symbol=symbol, marginType=mt)
+            logger.info(f"Set margin type for {symbol} to {mt}")
+            return True
+        except BinanceAPIException as e:
+            # Ignore if margin type is already set
+            if "No need to change margin type" in str(e):
+                logger.debug(f"Margin type for {symbol} already set to {mt}")
+                return True
+            logger.error(f"Failed to set margin type for {symbol}: {e}")
+            return False
+    
+    def configure_symbol(self, symbol: str) -> bool:
+        """
+        Configure a symbol with leverage and margin type settings.
+        
+        Args:
+            symbol: Trading pair (e.g., 'BTCUSDT')
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        margin_ok = self.set_margin_type(symbol)
+        leverage_ok = self.set_leverage(symbol)
+        return margin_ok and leverage_ok
+    
+    def get_futures_symbols(self) -> List[str]:
         """Get all available USDT futures trading pairs."""
         try:
             exchange_info = self.client.futures_exchange_info()
@@ -35,7 +103,7 @@ class BinanceClient:
             logger.error(f"Failed to get futures symbols: {e}")
             return []
     
-    def get_24h_ticker(self, symbol: Optional[str] = None) -> list[dict]:
+    def get_24h_ticker(self, symbol: Optional[str] = None) -> List[dict]:
         """Get 24h ticker data for futures."""
         try:
             if symbol:
@@ -91,7 +159,7 @@ class BinanceClient:
         self, 
         count: int = 20, 
         min_volume: float = 10000000
-    ) -> list[dict]:
+    ) -> List[dict]:
         """
         Get the top volatile coins based on 24h price change.
         

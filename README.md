@@ -1,21 +1,23 @@
 # Predbot 🤖📈
 
-A Binance Futures Scalping Bot that identifies high-probability trade opportunities with DCA (Dollar Cost Averaging) entry levels and multiple take profit levels, and sends detailed notifications to Telegram.
+A Binance Futures Scalping Bot with **20x Cross Leverage** that identifies high-probability trade opportunities with DCA (Dollar Cost Averaging) entry levels and multiple take profit levels, and sends detailed notifications to Telegram.
 
 ## Features
 
+- **20x Cross Leverage**: Pre-configured for Binance Futures with 20x cross margin
 - **DCA Scalping Trade Signals**: Generates complete trade setups with:
   - **4 DCA Entry Levels** for optimal average entry price
-  - **4 Take Profit Levels** for scaling out
+  - **4 Take Profit Levels** for scaling out (0.3%, 0.8%, 1.5%, 2.5%)
   - **Stop Loss** with ATR-based calculation
   - **Average Entry Price** calculation
   - **Trade Quality Score** (0-100)
 
-- **Trade Quality Validation**: Only sends trades that meet strict criteria:
-  - Minimum 1:1.5 Risk/Reward ratio
-  - At least 6/10 indicators aligned
-  - 60%+ timeframe alignment
-  - Minimum 0.5% profit potential
+- **Strict Trade Quality Validation**: Only sends trades that meet strict criteria (to avoid loss trades):
+  - Minimum **1:2 Risk/Reward ratio**
+  - At least **7/10 indicators** aligned
+  - **70%+ timeframe** alignment
+  - Minimum **1% profit potential**
+  - Minimum trade score of **75**
 
 - **Volatility Scanner**: Automatically identifies the top 20 most volatile coins on Binance Futures
 - **Multi-Timeframe Analysis**: Analyzes coins across multiple timeframes (5m, 15m, 1h, 4h)
@@ -148,8 +150,9 @@ asyncio.run(single_scan())
 🟢 SCALPING TRADE: BTCUSDT 🟢
 
 📊 Direction: LONG
+⚡ Leverage: 20x CROSSED
 🏆 Trade Quality: ⭐⭐ HIGH PROBABILITY
-💯 Score: 78/100
+💯 Score: 82/100
 💰 Current Price: $42,500.0000
 ⏰ Time: 2024-01-15 14:30:00 UTC
 
@@ -161,37 +164,38 @@ asyncio.run(single_scan())
   📊 Avg Entry: $42,186.3750
 
 🎯 TAKE PROFIT LEVELS (Scale Out):
-  TP1 (25%): $42,397.3000
-  TP2 (25%): $42,819.1000
-  TP3 (25%): $43,240.9000
-  TP4 (25%): $44,100.0000
+  TP1 (25%): $42,312.9300 (0.3%)
+  TP2 (25%): $42,524.4900 (0.8%)
+  TP3 (25%): $42,819.1000 (1.5%)
+  TP4 (25%): $43,240.9000 (2.5%)
 
-🛑 STOP LOSS: $41,543.9000
+🛑 STOP LOSS: $41,764.2300 (-1%)
 
 📈 TRADE METRICS:
-  Risk: 1.52%
-  Reward: 2.83%
-  R:R Ratio: 1:1.9
-  Indicators Aligned: 7/10
+  Risk: 1.00%
+  Reward: 2.50%
+  R:R Ratio: 1:2.5
+  Indicators Aligned: 8/10
 
 📊 KEY LEVELS:
   Support: $41,800.0000
   Resistance: $44,200.0000
 
 📈 Timeframe Analysis:
-  🟢 5m: BULLISH (72%)
-  🟢 15m: BULLISH (75%)
-  🟢 1h: BULLISH (80%)
-  🟢 4h: BULLISH (82%)
+  🟢 5m: BULLISH (78%)
+  🟢 15m: BULLISH (82%)
+  🟢 1h: BULLISH (85%)
+  🟢 4h: BULLISH (88%)
 
 🔧 Key Indicators:
   🟢 RSI: BUY
   🟢 MACD: BUY
   🟢 EMA: BUY
-  ⚪ BOLLINGER: NEUTRAL
   🟢 STOCHASTIC: BUY
+  🟢 ADX: BUY
 
 💡 DCA EXECUTION STRATEGY:
+• Set leverage to 20x CROSS margin
 • Place 25% of position at each entry level
 • Wait for price to reach each level before adding
 • Average entry price improves with each DCA fill
@@ -203,20 +207,21 @@ asyncio.run(single_scan())
 
 ## Scalping Trade Validation
 
-The bot only sends trades that meet **strict quality criteria**:
+The bot only sends trades that meet **strict quality criteria** to avoid loss trades:
 
 | Criteria | Minimum Requirement |
 |----------|-------------------|
-| Risk/Reward Ratio | 1:1.5 |
-| Profit Potential | 0.5% |
-| Indicator Alignment | 6/10 indicators |
-| Timeframe Alignment | 60% |
+| Risk/Reward Ratio | **1:2** |
+| Profit Potential | **1%** |
+| Indicator Alignment | **7/10 indicators** |
+| Timeframe Alignment | **70%** |
+| Trade Score | **75/100** |
 
 ### Trade Quality Scores
 
-- **⭐⭐⭐ EXCELLENT (80-100)**: Very high probability setup
-- **⭐⭐ HIGH PROBABILITY (70-79)**: Strong setup
-- **⭐ MODERATE (60-69)**: Acceptable but use caution
+- **⭐⭐⭐ EXCELLENT (85-100)**: Very high probability setup
+- **⭐⭐ HIGH PROBABILITY (75-84)**: Strong setup (minimum for alerts)
+- **⭐ MODERATE (65-74)**: Not sent - below threshold
 
 ## Pattern Detection
 

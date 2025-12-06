@@ -8,6 +8,8 @@ from typing import Optional, List, Tuple
 import pandas as pd
 import numpy as np
 
+from src.config import Config
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,39 +24,44 @@ class ScalpingAnalyzer:
     - Trade quality validation for high-profit trades only
     """
     
-    # Minimum requirements for a valid scalping trade (configurable via constructor)
-    DEFAULT_MIN_RISK_REWARD_RATIO = 1.5  # Minimum 1:1.5 risk/reward
-    DEFAULT_MIN_PROFIT_POTENTIAL = 0.5  # Minimum 0.5% profit potential
-    DEFAULT_MIN_INDICATOR_ALIGNMENT = 6  # At least 6/10 indicators aligned
-    DEFAULT_MIN_TIMEFRAME_ALIGNMENT = 0.6  # At least 60% timeframes aligned
+    # Minimum requirements for a valid scalping trade - STRICTER defaults for 20x leverage
+    DEFAULT_MIN_RISK_REWARD_RATIO = 2.0  # Minimum 1:2 risk/reward (stricter for leverage)
+    DEFAULT_MIN_PROFIT_POTENTIAL = 1.0  # Minimum 1% profit potential
+    DEFAULT_MIN_INDICATOR_ALIGNMENT = 7  # At least 7/10 indicators aligned
+    DEFAULT_MIN_TIMEFRAME_ALIGNMENT = 0.7  # At least 70% timeframes aligned
+    DEFAULT_MIN_TRADE_SCORE = 75  # Minimum 75 score for high probability trades
     
-    # Take profit multipliers for long positions
-    TP_MULTIPLIERS_LONG = [1.005, 1.015, 1.025, 1.04]  # 0.5%, 1.5%, 2.5%, 4%
-    TP_MULTIPLIERS_SHORT = [0.995, 0.985, 0.975, 0.96]  # -0.5%, -1.5%, -2.5%, -4%
+    # Take profit multipliers for long positions - adjusted for 20x leverage scalping
+    TP_MULTIPLIERS_LONG = [1.003, 1.008, 1.015, 1.025]  # 0.3%, 0.8%, 1.5%, 2.5%
+    TP_MULTIPLIERS_SHORT = [0.997, 0.992, 0.985, 0.975]  # -0.3%, -0.8%, -1.5%, -2.5%
     
-    # Stop loss distance multiplier
-    MIN_STOP_DISTANCE = 0.015  # Minimum 1.5% stop distance for scalping
+    # Stop loss distance multiplier - tighter for scalping
+    # Value 0.01 = 1% stop distance (e.g., entry at $100 -> stop at $99 for long)
+    MIN_STOP_DISTANCE = 0.01
     
     def __init__(
         self,
         min_risk_reward: float = None,
         min_profit_potential: float = None,
         min_indicator_alignment: int = None,
-        min_timeframe_alignment: float = None
+        min_timeframe_alignment: float = None,
+        min_trade_score: int = None
     ):
         """
         Initialize the scalping analyzer.
         
         Args:
-            min_risk_reward: Minimum risk/reward ratio (default: 1.5)
-            min_profit_potential: Minimum profit potential % (default: 0.5)
-            min_indicator_alignment: Minimum aligned indicators (default: 6)
-            min_timeframe_alignment: Minimum timeframe alignment (default: 0.6)
+            min_risk_reward: Minimum risk/reward ratio (default: 2.0 for 20x leverage)
+            min_profit_potential: Minimum profit potential % (default: 1.0%)
+            min_indicator_alignment: Minimum aligned indicators (default: 7/10)
+            min_timeframe_alignment: Minimum timeframe alignment (default: 0.7)
+            min_trade_score: Minimum trade score for high probability (default: 75)
         """
         self.min_risk_reward = min_risk_reward or self.DEFAULT_MIN_RISK_REWARD_RATIO
         self.min_profit_potential = min_profit_potential or self.DEFAULT_MIN_PROFIT_POTENTIAL
         self.min_indicator_alignment = min_indicator_alignment or self.DEFAULT_MIN_INDICATOR_ALIGNMENT
         self.min_timeframe_alignment = min_timeframe_alignment or self.DEFAULT_MIN_TIMEFRAME_ALIGNMENT
+        self.min_trade_score = min_trade_score or self.DEFAULT_MIN_TRADE_SCORE
     
     def calculate_entry_levels(
         self,
@@ -486,9 +493,13 @@ class ScalpingAnalyzer:
             indicator_signals, timeframe_alignment, pattern_confidence
         )
         
-        # Only return trade if it meets quality criteria
+        # Only return trade if it meets quality criteria AND minimum score
         if not validation['is_valid']:
             logger.info(f"Trade rejected for {symbol}: {validation['reasons']}")
+            return None
+        
+        if validation['score'] < self.min_trade_score:
+            logger.info(f"Trade rejected for {symbol}: Score {validation['score']} < {self.min_trade_score}")
             return None
         
         return {
@@ -506,5 +517,7 @@ class ScalpingAnalyzer:
             'reward_percent': validation['reward_percent'],
             'risk_reward_ratio': validation['risk_reward_ratio'],
             'indicators_aligned': validation['indicators_aligned'],
-            'is_high_probability': validation['score'] >= 70
+            'is_high_probability': validation['score'] >= self.min_trade_score,
+            'leverage': Config.LEVERAGE,
+            'margin_type': Config.MARGIN_TYPE
         }

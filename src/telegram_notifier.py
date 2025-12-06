@@ -62,11 +62,11 @@ class TelegramNotifier:
         direction = trade['direction']
         emoji = "🟢" if direction == "LONG" else "🔴"
         
-        # Trade quality indicator
+        # Trade quality indicator - stricter thresholds
         score = trade.get('trade_score', 0)
-        if score >= 80:
+        if score >= 85:
             quality = "⭐⭐⭐ EXCELLENT"
-        elif score >= 70:
+        elif score >= 75:
             quality = "⭐⭐ HIGH PROBABILITY"
         else:
             quality = "⭐ MODERATE"
@@ -75,10 +75,15 @@ class TelegramNotifier:
         entries = trade['entries']
         avg_entry = sum(entries) / len(entries)
         
+        # Get leverage and margin info
+        leverage = trade.get('leverage', 20)
+        margin_type = trade.get('margin_type', 'CROSSED')
+        
         message = f"""
 {emoji} <b>SCALPING TRADE: {trade['symbol']}</b> {emoji}
 
 📊 <b>Direction:</b> {direction}
+⚡ <b>Leverage:</b> {leverage}x {margin_type}
 🏆 <b>Trade Quality:</b> {quality}
 💯 <b>Score:</b> {score}/100
 💰 <b>Current Price:</b> ${trade['current_price']:,.4f}
