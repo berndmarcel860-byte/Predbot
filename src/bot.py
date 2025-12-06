@@ -1,6 +1,6 @@
 """
 Predbot - Main Bot Module.
-Orchestrates the crypto trading analysis bot.
+Orchestrates the crypto trading analysis bot for scalping.
 """
 
 import asyncio
@@ -15,6 +15,7 @@ from .indicators import TechnicalIndicators
 from .patterns import ChartPatterns
 from .trend_analyzer import TrendAnalyzer
 from .telegram_notifier import TelegramNotifier
+from .scalping_analyzer import ScalpingAnalyzer
 
 # Configure logging
 logging.basicConfig(
@@ -29,13 +30,14 @@ logger = logging.getLogger(__name__)
 
 class Predbot:
     """
-    Main trading analysis bot.
+    Main trading analysis bot for Binance Futures scalping.
     
     This bot:
     1. Identifies top volatile coins on Binance Futures
     2. Analyzes them using 10 indicators and 10 patterns
     3. Checks trend direction across multiple timeframes
-    4. Sends Telegram notifications for strong signals
+    4. Generates scalping trades with 4 entries, 4 TPs, and stop loss
+    5. Only sends high-probability trades to Telegram
     
     Note: This bot does NOT open trades, only identifies opportunities.
     """
@@ -48,12 +50,13 @@ class Predbot:
         self.trend_analyzer = TrendAnalyzer(
             confirmation_threshold=Config.TREND_CONFIRMATION_THRESHOLD
         )
+        self.scalping_analyzer = ScalpingAnalyzer()
         self.is_running = False
         self.scan_count = 0
     
     async def initialize(self) -> bool:
         """Initialize connections and validate configuration."""
-        logger.info("Initializing Predbot...")
+        logger.info("Initializing Predbot Scalping Bot...")
         
         # Validate configuration
         if not Config.validate():
@@ -86,9 +89,87 @@ class Predbot:
         
         return True
     
+    async def analyze_symbol_for_scalping(self, symbol: str) -> Optional[dict]:
+        """
+        Perform full scalping analysis on a symbol.
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            
+        Returns:
+            Scalping trade setup or None if no valid trade
+        """
+        logger.info(f"Analyzing {symbol} for scalping...")
+        
+        try:
+            # Fetch data for all timeframes
+            timeframe_data = {}
+            for tf in Config.TIMEFRAMES:
+                df = self.binance.get_klines(symbol, tf, limit=250)
+                if not df.empty:
+                    timeframe_data[tf] = df
+            
+            if not timeframe_data:
+                logger.warning(f"No data available for {symbol}")
+                return None
+            
+            # Perform multi-timeframe analysis
+            mtf_analysis = self.trend_analyzer.analyze_multi_timeframe(timeframe_data)
+            
+            # Skip if no clear direction
+            if mtf_analysis['overall_direction'] == 'neutral':
+                logger.debug(f"{symbol}: No clear direction")
+                return None
+            
+            # Get current price
+            ticker = self.binance.get_24h_ticker(symbol)
+            current_price = float(ticker[0]['lastPrice']) if ticker else 0
+            
+            if current_price == 0:
+                return None
+            
+            # Get indicator signals from primary timeframe
+            primary_tf = '5m' if '5m' in timeframe_data else list(timeframe_data.keys())[0]
+            primary_df = timeframe_data[primary_tf]
+            primary_indicators = mtf_analysis['timeframe_results'].get(
+                primary_tf, {}
+            ).get('indicator_signals', {})
+            
+            # Get pattern target if available
+            pattern_target = None
+            pattern_confidence = 70
+            for tf, result in mtf_analysis['timeframe_results'].items():
+                for pattern_name, pattern_data in result.get('pattern_signals', {}).items():
+                    if pattern_data.get('take_profit'):
+                        pattern_target = pattern_data['take_profit']
+                        pattern_confidence = pattern_data.get('confidence', 70)
+                        break
+            
+            # Generate scalping trade
+            scalping_trade = self.scalping_analyzer.generate_scalping_trade(
+                symbol=symbol,
+                current_price=current_price,
+                direction=mtf_analysis['overall_direction'],
+                df=primary_df,
+                indicator_signals=primary_indicators,
+                timeframe_alignment=mtf_analysis['alignment'] / 100,
+                pattern_confidence=pattern_confidence,
+                pattern_target=pattern_target
+            )
+            
+            if scalping_trade:
+                scalping_trade['timeframe_results'] = mtf_analysis['timeframe_results']
+                scalping_trade['indicators'] = primary_indicators
+                
+            return scalping_trade
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {symbol} for scalping: {e}")
+            return None
+    
     async def analyze_symbol(self, symbol: str) -> Optional[dict]:
         """
-        Perform full analysis on a symbol.
+        Perform full analysis on a symbol (legacy method).
         
         Args:
             symbol: Trading pair symbol (e.g., 'BTCUSDT')
@@ -174,13 +255,13 @@ class Predbot:
     
     async def scan_market(self) -> list[dict]:
         """
-        Scan the market for trade opportunities.
+        Scan the market for scalping trade opportunities.
         
         Returns:
-            List of symbols with strong signals
+            List of high-probability scalping trades
         """
         self.scan_count += 1
-        logger.info(f"Starting market scan #{self.scan_count}...")
+        logger.info(f"Starting scalping market scan #{self.scan_count}...")
         
         # Get top volatile coins
         volatile_coins = self.binance.get_top_volatile_coins(
@@ -194,29 +275,25 @@ class Predbot:
         
         logger.info(f"Found {len(volatile_coins)} volatile coins to analyze")
         
-        # Analyze each coin
-        strong_signals = []
+        # Analyze each coin for scalping
+        high_probability_trades = []
         for coin in volatile_coins:
             symbol = coin['symbol']
-            analysis = await self.analyze_symbol(symbol)
+            scalping_trade = await self.analyze_symbol_for_scalping(symbol)
             
-            if analysis and analysis['is_strong_signal']:
-                strong_signals.append(analysis)
+            if scalping_trade and scalping_trade.get('is_high_probability'):
+                high_probability_trades.append(scalping_trade)
                 logger.info(
-                    f"Strong signal found: {symbol} - "
-                    f"{analysis['recommendation']} ({analysis['signal_strength']}%)"
+                    f"High-probability trade found: {symbol} - "
+                    f"{scalping_trade['direction']} (Score: {scalping_trade['trade_score']})"
                 )
                 
                 # Send Telegram alert
                 if self.telegram:
-                    await self.telegram.send_trade_alert(
-                        symbol=symbol,
-                        direction=analysis['direction'],
-                        signal_strength=analysis['signal_strength'],
-                        current_price=analysis['current_price'],
-                        timeframe_results=analysis['timeframe_results'],
-                        indicators=analysis['indicators'],
-                        patterns=analysis['patterns']
+                    await self.telegram.send_scalping_trade_alert(
+                        trade=scalping_trade,
+                        timeframe_results=scalping_trade.get('timeframe_results'),
+                        indicators=scalping_trade.get('indicators')
                     )
             
             # Small delay to avoid rate limits
@@ -226,22 +303,22 @@ class Predbot:
         if self.telegram:
             await self.telegram.send_scan_summary(
                 coins_scanned=len(volatile_coins),
-                signals_found=len(strong_signals),
+                signals_found=len(high_probability_trades),
                 top_signals=[
                     {
-                        'symbol': s['symbol'],
-                        'direction': s['direction'],
-                        'strength': s['signal_strength']
+                        'symbol': t['symbol'],
+                        'direction': t['direction'],
+                        'trade_score': t['trade_score']
                     }
-                    for s in sorted(
-                        strong_signals,
-                        key=lambda x: x['signal_strength'],
+                    for t in sorted(
+                        high_probability_trades,
+                        key=lambda x: x['trade_score'],
                         reverse=True
                     )
                 ]
             )
         
-        return strong_signals
+        return high_probability_trades
     
     async def run(self, scan_interval: int = 300):
         """
@@ -250,7 +327,7 @@ class Predbot:
         Args:
             scan_interval: Seconds between scans (default: 5 minutes)
         """
-        logger.info("Starting Predbot...")
+        logger.info("Starting Predbot Scalping Bot...")
         
         if not await self.initialize():
             logger.error("Initialization failed. Exiting.")
