@@ -52,7 +52,7 @@ class TelegramNotifier:
         indicators: dict,
         patterns: list
     ) -> str:
-        """Format a trade alert message."""
+        """Format a trade alert message with entry prices."""
         
         emoji = "🟢" if direction == "bullish" else "🔴" if direction == "bearish" else "⚪"
         direction_text = direction.upper()
@@ -64,7 +64,7 @@ class TelegramNotifier:
 
 📊 <b>Signal:</b> {recommendation}
 💪 <b>Strength:</b> {signal_strength}%
-💰 <b>Price:</b> ${current_price:,.4f}
+💰 <b>Current Price:</b> ${current_price:,.4f}
 ⏰ <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC
 
 <b>📈 Timeframe Analysis:</b>
@@ -83,12 +83,24 @@ class TelegramNotifier:
                 signal_text = "BUY" if signal == 1 else "SELL" if signal == -1 else "NEUTRAL"
                 message += f"  {ind_emoji} {name.upper()}: {signal_text}\n"
         
-        # Add detected patterns
+        # Add detected patterns with entry prices
         if patterns:
             message += "\n<b>📐 Patterns Detected:</b>\n"
             for pattern in patterns[:3]:
                 pattern_emoji = "🟢" if pattern['signal'] == 1 else "🔴"
-                message += f"  {pattern_emoji} {pattern['name']}: {pattern['confidence']}% confidence\n"
+                status_emoji = "⏳" if pattern.get('status') == 'forming' else "✅" if pattern.get('status') == 'ready' else "🔔"
+                status_text = pattern.get('status', 'unknown').upper()
+                message += f"  {pattern_emoji} {pattern['name']}: {status_text} ({pattern['confidence']}%)\n"
+                
+                # Add entry levels if available
+                if pattern.get('entry_price'):
+                    message += f"     📍 Entry: ${pattern['entry_price']:,.4f}\n"
+                if pattern.get('stop_loss'):
+                    message += f"     🛑 Stop Loss: ${pattern['stop_loss']:,.4f}\n"
+                if pattern.get('take_profit'):
+                    message += f"     🎯 Take Profit: ${pattern['take_profit']:,.4f}\n"
+                if pattern.get('breakout_level'):
+                    message += f"     ⚡ Breakout Level: ${pattern['breakout_level']:,.4f}\n"
         
         message += "\n⚠️ <i>This is not financial advice. Always do your own research.</i>"
         

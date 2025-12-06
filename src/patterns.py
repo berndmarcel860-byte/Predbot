@@ -1,6 +1,7 @@
 """
 Chart Patterns Module.
 Implements 10 key chart patterns for trading analysis.
+Detects patterns BEFORE breakout to provide early entry opportunities.
 """
 
 import logging
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 class ChartPatterns:
     """
     Chart Pattern Detector.
+    
+    Detects patterns BEFORE breakout for early entry opportunities.
+    Provides entry price levels, stop loss, and take profit targets.
     
     Implements 10 key patterns:
     1. Double Top
@@ -38,10 +42,20 @@ class ChartPatterns:
     @staticmethod
     def detect_double_top(df: pd.DataFrame, tolerance: float = 0.02) -> dict:
         """
-        Detect Double Top pattern (bearish reversal).
+        Detect Double Top pattern (bearish reversal) BEFORE breakout.
         Two peaks at similar price levels with a valley between.
+        Signals when pattern is forming, before neckline break.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',  # 'forming', 'ready', 'confirmed'
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             highs, _ = ChartPatterns.find_local_extrema(df, order=10)
@@ -63,17 +77,42 @@ class ChartPatterns:
                 if len(valley_slice) > 0:
                     valley_idx = valley_slice.idxmin()
                     current_price = df['close'].iloc[-1]
-                    # Pattern confirmed if price breaks below valley
                     valley_price = df['low'].loc[valley_idx]
+                    avg_peak = (peak1_price + peak2_price) / 2
                     
-                    if current_price < valley_price:
+                    # Calculate pattern height for targets
+                    pattern_height = avg_peak - valley_price
+                    
+                    # BEFORE BREAKOUT: Pattern is forming/ready
+                    if current_price > valley_price:
                         result['detected'] = True
                         result['signal'] = -1  # Bearish
-                        result['confidence'] = min(90, 70 + (1 - price_diff) * 20)
-                    elif current_price < peak2_price * 0.98:
+                        result['breakout_level'] = valley_price
+                        
+                        # Entry on retest of neckline or current price
+                        result['entry_price'] = valley_price * 0.998  # Just below neckline
+                        result['stop_loss'] = avg_peak * 1.01  # Above peaks
+                        result['take_profit'] = valley_price - pattern_height  # Pattern projection
+                        
+                        # Determine status based on price position
+                        distance_to_neckline = (current_price - valley_price) / valley_price
+                        if distance_to_neckline < 0.02:  # Within 2% of neckline
+                            result['status'] = 'ready'
+                            result['confidence'] = min(85, 70 + (1 - price_diff) * 20)
+                        else:
+                            result['status'] = 'forming'
+                            result['confidence'] = min(70, 55 + (1 - price_diff) * 15)
+                    
+                    # AFTER BREAKOUT: Already confirmed
+                    elif current_price < valley_price:
                         result['detected'] = True
                         result['signal'] = -1
-                        result['confidence'] = 60
+                        result['status'] = 'confirmed'
+                        result['confidence'] = min(90, 75 + (1 - price_diff) * 20)
+                        result['entry_price'] = current_price  # Can still enter on retest
+                        result['stop_loss'] = valley_price * 1.02
+                        result['take_profit'] = valley_price - pattern_height
+                        result['breakout_level'] = valley_price
                         
         except Exception as e:
             logger.debug(f"Double Top detection error: {e}")
@@ -83,10 +122,20 @@ class ChartPatterns:
     @staticmethod
     def detect_double_bottom(df: pd.DataFrame, tolerance: float = 0.02) -> dict:
         """
-        Detect Double Bottom pattern (bullish reversal).
+        Detect Double Bottom pattern (bullish reversal) BEFORE breakout.
         Two troughs at similar price levels with a peak between.
+        Signals when pattern is forming, before neckline break.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             _, lows = ChartPatterns.find_local_extrema(df, order=10)
@@ -109,15 +158,41 @@ class ChartPatterns:
                     peak_idx = peak_slice.idxmax()
                     current_price = df['close'].iloc[-1]
                     peak_price = df['high'].loc[peak_idx]
+                    avg_trough = (trough1_price + trough2_price) / 2
                     
-                    if current_price > peak_price:
+                    # Calculate pattern height for targets
+                    pattern_height = peak_price - avg_trough
+                    
+                    # BEFORE BREAKOUT: Pattern is forming/ready
+                    if current_price < peak_price:
                         result['detected'] = True
                         result['signal'] = 1  # Bullish
-                        result['confidence'] = min(90, 70 + (1 - price_diff) * 20)
-                    elif current_price > trough2_price * 1.02:
+                        result['breakout_level'] = peak_price
+                        
+                        # Entry just above neckline on breakout
+                        result['entry_price'] = peak_price * 1.002  # Just above neckline
+                        result['stop_loss'] = avg_trough * 0.99  # Below troughs
+                        result['take_profit'] = peak_price + pattern_height  # Pattern projection
+                        
+                        # Determine status based on price position
+                        distance_to_neckline = (peak_price - current_price) / peak_price
+                        if distance_to_neckline < 0.02:  # Within 2% of neckline
+                            result['status'] = 'ready'
+                            result['confidence'] = min(85, 70 + (1 - price_diff) * 20)
+                        else:
+                            result['status'] = 'forming'
+                            result['confidence'] = min(70, 55 + (1 - price_diff) * 15)
+                    
+                    # AFTER BREAKOUT: Already confirmed
+                    elif current_price > peak_price:
                         result['detected'] = True
                         result['signal'] = 1
-                        result['confidence'] = 60
+                        result['status'] = 'confirmed'
+                        result['confidence'] = min(90, 75 + (1 - price_diff) * 20)
+                        result['entry_price'] = current_price  # Can still enter on retest
+                        result['stop_loss'] = peak_price * 0.98
+                        result['take_profit'] = peak_price + pattern_height
+                        result['breakout_level'] = peak_price
                         
         except Exception as e:
             logger.debug(f"Double Bottom detection error: {e}")
@@ -127,10 +202,20 @@ class ChartPatterns:
     @staticmethod
     def detect_head_and_shoulders(df: pd.DataFrame, tolerance: float = 0.03) -> dict:
         """
-        Detect Head and Shoulders pattern (bearish reversal).
+        Detect Head and Shoulders pattern (bearish reversal) BEFORE breakout.
         Three peaks with the middle one being the highest.
+        Signals when right shoulder is forming, before neckline break.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             highs, _ = ChartPatterns.find_local_extrema(df, order=8)
@@ -156,11 +241,37 @@ class ChartPatterns:
                     neckline = (low1 + low2) / 2
                     
                     current_price = df['close'].iloc[-1]
+                    pattern_height = head_price - neckline
                     
-                    if current_price < neckline:
+                    # BEFORE BREAKOUT: Pattern is forming/ready
+                    if current_price > neckline:
                         result['detected'] = True
                         result['signal'] = -1  # Bearish
-                        result['confidence'] = min(90, 70 + (1 - shoulder_diff) * 20)
+                        result['breakout_level'] = neckline
+                        
+                        # Entry just below neckline
+                        result['entry_price'] = neckline * 0.998
+                        result['stop_loss'] = right_price * 1.01  # Above right shoulder
+                        result['take_profit'] = neckline - pattern_height
+                        
+                        distance_to_neckline = (current_price - neckline) / neckline
+                        if distance_to_neckline < 0.02:
+                            result['status'] = 'ready'
+                            result['confidence'] = min(88, 72 + (1 - shoulder_diff) * 20)
+                        else:
+                            result['status'] = 'forming'
+                            result['confidence'] = min(72, 58 + (1 - shoulder_diff) * 15)
+                    
+                    # AFTER BREAKOUT: Confirmed
+                    elif current_price < neckline:
+                        result['detected'] = True
+                        result['signal'] = -1
+                        result['status'] = 'confirmed'
+                        result['confidence'] = min(92, 78 + (1 - shoulder_diff) * 20)
+                        result['entry_price'] = current_price
+                        result['stop_loss'] = neckline * 1.02
+                        result['take_profit'] = neckline - pattern_height
+                        result['breakout_level'] = neckline
                         
         except Exception as e:
             logger.debug(f"Head and Shoulders detection error: {e}")
@@ -170,10 +281,20 @@ class ChartPatterns:
     @staticmethod
     def detect_inverse_head_and_shoulders(df: pd.DataFrame, tolerance: float = 0.03) -> dict:
         """
-        Detect Inverse Head and Shoulders pattern (bullish reversal).
+        Detect Inverse Head and Shoulders pattern (bullish reversal) BEFORE breakout.
         Three troughs with the middle one being the lowest.
+        Signals when right shoulder is forming, before neckline break.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             _, lows = ChartPatterns.find_local_extrema(df, order=8)
@@ -199,11 +320,37 @@ class ChartPatterns:
                     neckline = (high1 + high2) / 2
                     
                     current_price = df['close'].iloc[-1]
+                    pattern_height = neckline - head_price
                     
-                    if current_price > neckline:
+                    # BEFORE BREAKOUT: Pattern is forming/ready
+                    if current_price < neckline:
                         result['detected'] = True
                         result['signal'] = 1  # Bullish
-                        result['confidence'] = min(90, 70 + (1 - shoulder_diff) * 20)
+                        result['breakout_level'] = neckline
+                        
+                        # Entry just above neckline
+                        result['entry_price'] = neckline * 1.002
+                        result['stop_loss'] = right_price * 0.99  # Below right shoulder
+                        result['take_profit'] = neckline + pattern_height
+                        
+                        distance_to_neckline = (neckline - current_price) / neckline
+                        if distance_to_neckline < 0.02:
+                            result['status'] = 'ready'
+                            result['confidence'] = min(88, 72 + (1 - shoulder_diff) * 20)
+                        else:
+                            result['status'] = 'forming'
+                            result['confidence'] = min(72, 58 + (1 - shoulder_diff) * 15)
+                    
+                    # AFTER BREAKOUT: Confirmed
+                    elif current_price > neckline:
+                        result['detected'] = True
+                        result['signal'] = 1
+                        result['status'] = 'confirmed'
+                        result['confidence'] = min(92, 78 + (1 - shoulder_diff) * 20)
+                        result['entry_price'] = current_price
+                        result['stop_loss'] = neckline * 0.98
+                        result['take_profit'] = neckline + pattern_height
+                        result['breakout_level'] = neckline
                         
         except Exception as e:
             logger.debug(f"Inverse H&S detection error: {e}")
@@ -213,10 +360,20 @@ class ChartPatterns:
     @staticmethod
     def detect_ascending_triangle(df: pd.DataFrame, lookback: int = 50) -> dict:
         """
-        Detect Ascending Triangle pattern (typically bullish).
+        Detect Ascending Triangle pattern (typically bullish) BEFORE breakout.
         Flat resistance with rising support.
+        Signals when price is approaching apex for early entry.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             recent = df.tail(lookback)
@@ -237,9 +394,30 @@ class ChartPatterns:
             )
             
             if resistance_std < 0.02 and rising_support:
+                resistance_level = np.mean(resistance_prices)
+                current_support = support_prices[-1]
+                current_price = recent['close'].iloc[-1]
+                
+                # Calculate pattern height for targets
+                pattern_height = resistance_level - support_prices[0]
+                
                 result['detected'] = True
                 result['signal'] = 1  # Bullish breakout expected
-                result['confidence'] = 70
+                result['breakout_level'] = resistance_level
+                
+                # Entry just above resistance on breakout
+                result['entry_price'] = resistance_level * 1.002
+                result['stop_loss'] = current_support * 0.99
+                result['take_profit'] = resistance_level + pattern_height
+                
+                # Check how close to apex (convergence)
+                distance_to_resistance = (resistance_level - current_price) / resistance_level
+                if distance_to_resistance < 0.015:
+                    result['status'] = 'ready'
+                    result['confidence'] = 78
+                else:
+                    result['status'] = 'forming'
+                    result['confidence'] = 65
                 
         except Exception as e:
             logger.debug(f"Ascending Triangle detection error: {e}")
@@ -249,10 +427,20 @@ class ChartPatterns:
     @staticmethod
     def detect_descending_triangle(df: pd.DataFrame, lookback: int = 50) -> dict:
         """
-        Detect Descending Triangle pattern (typically bearish).
+        Detect Descending Triangle pattern (typically bearish) BEFORE breakout.
         Flat support with falling resistance.
+        Signals when price is approaching apex for early entry.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             recent = df.tail(lookback)
@@ -273,9 +461,30 @@ class ChartPatterns:
             )
             
             if support_std < 0.02 and falling_resistance:
+                support_level = np.mean(support_prices)
+                current_resistance = resistance_prices[-1]
+                current_price = recent['close'].iloc[-1]
+                
+                # Calculate pattern height for targets
+                pattern_height = resistance_prices[0] - support_level
+                
                 result['detected'] = True
                 result['signal'] = -1  # Bearish breakdown expected
-                result['confidence'] = 70
+                result['breakout_level'] = support_level
+                
+                # Entry just below support on breakdown
+                result['entry_price'] = support_level * 0.998
+                result['stop_loss'] = current_resistance * 1.01
+                result['take_profit'] = support_level - pattern_height
+                
+                # Check how close to apex (convergence)
+                distance_to_support = (current_price - support_level) / support_level
+                if distance_to_support < 0.015:
+                    result['status'] = 'ready'
+                    result['confidence'] = 78
+                else:
+                    result['status'] = 'forming'
+                    result['confidence'] = 65
                 
         except Exception as e:
             logger.debug(f"Descending Triangle detection error: {e}")
@@ -285,10 +494,20 @@ class ChartPatterns:
     @staticmethod
     def detect_symmetrical_triangle(df: pd.DataFrame, lookback: int = 50) -> dict:
         """
-        Detect Symmetrical Triangle pattern (continuation pattern).
+        Detect Symmetrical Triangle pattern (continuation pattern) BEFORE breakout.
         Converging support and resistance.
+        Signals when price is approaching apex for early entry.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             recent = df.tail(lookback)
@@ -312,11 +531,38 @@ class ChartPatterns:
             )
             
             if lower_highs and higher_lows:
-                result['detected'] = True
+                current_price = recent['close'].iloc[-1]
+                current_resistance = resistance_prices[-1]
+                current_support = support_prices[-1]
+                
+                # Calculate pattern height for targets
+                pattern_height = resistance_prices[0] - support_prices[0]
+                
                 # Signal based on prior trend
                 prior_trend = recent['close'].iloc[0] < recent['close'].iloc[-1]
+                
+                result['detected'] = True
                 result['signal'] = 1 if prior_trend else -1
-                result['confidence'] = 65
+                
+                if prior_trend:  # Bullish breakout expected
+                    result['breakout_level'] = current_resistance
+                    result['entry_price'] = current_resistance * 1.002
+                    result['stop_loss'] = current_support * 0.99
+                    result['take_profit'] = current_resistance + pattern_height * 0.7
+                else:  # Bearish breakdown expected
+                    result['breakout_level'] = current_support
+                    result['entry_price'] = current_support * 0.998
+                    result['stop_loss'] = current_resistance * 1.01
+                    result['take_profit'] = current_support - pattern_height * 0.7
+                
+                # Check how tight the range is (approaching apex)
+                range_width = (current_resistance - current_support) / current_price
+                if range_width < 0.03:
+                    result['status'] = 'ready'
+                    result['confidence'] = 72
+                else:
+                    result['status'] = 'forming'
+                    result['confidence'] = 60
                 
         except Exception as e:
             logger.debug(f"Symmetrical Triangle detection error: {e}")
@@ -326,10 +572,20 @@ class ChartPatterns:
     @staticmethod
     def detect_rising_wedge(df: pd.DataFrame, lookback: int = 50) -> dict:
         """
-        Detect Rising Wedge pattern (bearish reversal).
+        Detect Rising Wedge pattern (bearish reversal) BEFORE breakout.
         Both support and resistance rising, but converging.
+        Signals when pattern is forming for early short entry.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             recent = df.tail(lookback)
@@ -358,9 +614,29 @@ class ChartPatterns:
                 low_range = support_prices[-1] - support_prices[0]
                 
                 if low_range > high_range:  # Support rising faster = wedge narrowing
+                    current_price = recent['close'].iloc[-1]
+                    current_support = support_prices[-1]
+                    
+                    # Calculate pattern height for targets
+                    pattern_height = resistance_prices[-1] - support_prices[0]
+                    
                     result['detected'] = True
                     result['signal'] = -1  # Bearish
-                    result['confidence'] = 65
+                    result['breakout_level'] = current_support
+                    
+                    # Entry just below support on breakdown
+                    result['entry_price'] = current_support * 0.998
+                    result['stop_loss'] = resistance_prices[-1] * 1.01
+                    result['take_profit'] = current_support - pattern_height * 0.6
+                    
+                    # Check convergence
+                    range_width = (resistance_prices[-1] - current_support) / current_price
+                    if range_width < 0.025:
+                        result['status'] = 'ready'
+                        result['confidence'] = 72
+                    else:
+                        result['status'] = 'forming'
+                        result['confidence'] = 60
                     
         except Exception as e:
             logger.debug(f"Rising Wedge detection error: {e}")
@@ -370,10 +646,20 @@ class ChartPatterns:
     @staticmethod
     def detect_falling_wedge(df: pd.DataFrame, lookback: int = 50) -> dict:
         """
-        Detect Falling Wedge pattern (bullish reversal).
+        Detect Falling Wedge pattern (bullish reversal) BEFORE breakout.
         Both support and resistance falling, but converging.
+        Signals when pattern is forming for early long entry.
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             recent = df.tail(lookback)
@@ -402,9 +688,29 @@ class ChartPatterns:
                 low_range = abs(support_prices[-1] - support_prices[0])
                 
                 if high_range > low_range:  # Resistance falling faster = wedge narrowing
+                    current_price = recent['close'].iloc[-1]
+                    current_resistance = resistance_prices[-1]
+                    
+                    # Calculate pattern height for targets
+                    pattern_height = resistance_prices[0] - support_prices[-1]
+                    
                     result['detected'] = True
                     result['signal'] = 1  # Bullish
-                    result['confidence'] = 65
+                    result['breakout_level'] = current_resistance
+                    
+                    # Entry just above resistance on breakout
+                    result['entry_price'] = current_resistance * 1.002
+                    result['stop_loss'] = support_prices[-1] * 0.99
+                    result['take_profit'] = current_resistance + pattern_height * 0.6
+                    
+                    # Check convergence
+                    range_width = (current_resistance - support_prices[-1]) / current_price
+                    if range_width < 0.025:
+                        result['status'] = 'ready'
+                        result['confidence'] = 72
+                    else:
+                        result['status'] = 'forming'
+                        result['confidence'] = 60
                     
         except Exception as e:
             logger.debug(f"Falling Wedge detection error: {e}")
@@ -416,8 +722,18 @@ class ChartPatterns:
         """
         Detect Bullish/Bearish Engulfing patterns.
         Current candle completely engulfs previous candle.
+        This is an immediate signal pattern (no pre-breakout state).
         """
-        result = {'detected': False, 'signal': 0, 'confidence': 0}
+        result = {
+            'detected': False, 
+            'signal': 0, 
+            'confidence': 0,
+            'status': 'none',
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'breakout_level': None
+        }
         
         try:
             if len(df) < 2:
@@ -435,9 +751,17 @@ class ChartPatterns:
                     if (curr['open'] < prev['close'] and 
                         curr['close'] > prev['open'] and 
                         curr_body > prev_body):
+                        
                         result['detected'] = True
                         result['signal'] = 1  # Bullish
+                        result['status'] = 'ready'  # Immediate entry
                         result['confidence'] = 75
+                        
+                        # Entry at current price or slightly above close
+                        result['entry_price'] = curr['close'] * 1.001
+                        result['stop_loss'] = curr['low'] * 0.99
+                        result['take_profit'] = curr['close'] + (curr_body * 2)
+                        result['breakout_level'] = curr['close']
                         return result
             
             # Bearish Engulfing: Previous green, current red and engulfs
@@ -446,9 +770,17 @@ class ChartPatterns:
                     if (curr['open'] > prev['close'] and 
                         curr['close'] < prev['open'] and 
                         curr_body > prev_body):
+                        
                         result['detected'] = True
                         result['signal'] = -1  # Bearish
+                        result['status'] = 'ready'  # Immediate entry
                         result['confidence'] = 75
+                        
+                        # Entry at current price or slightly below close
+                        result['entry_price'] = curr['close'] * 0.999
+                        result['stop_loss'] = curr['high'] * 1.01
+                        result['take_profit'] = curr['close'] - (curr_body * 2)
+                        result['breakout_level'] = curr['close']
                         
         except Exception as e:
             logger.debug(f"Engulfing pattern detection error: {e}")
@@ -483,7 +815,7 @@ class ChartPatterns:
     
     @classmethod
     def get_pattern_signals(cls, df: pd.DataFrame) -> dict:
-        """Get signals from detected patterns."""
+        """Get signals from detected patterns with entry levels."""
         signals = {}
         patterns = cls.detect_all_patterns(df)
         
@@ -491,7 +823,12 @@ class ChartPatterns:
             if pattern.get('detected', False):
                 signals[name] = {
                     'signal': pattern['signal'],
-                    'confidence': pattern['confidence']
+                    'confidence': pattern['confidence'],
+                    'status': pattern.get('status', 'none'),
+                    'entry_price': pattern.get('entry_price'),
+                    'stop_loss': pattern.get('stop_loss'),
+                    'take_profit': pattern.get('take_profit'),
+                    'breakout_level': pattern.get('breakout_level')
                 }
         
         return signals

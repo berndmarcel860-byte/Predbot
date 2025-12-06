@@ -123,15 +123,29 @@ class Predbot:
             ticker = self.binance.get_24h_ticker(symbol)
             current_price = float(ticker[0]['lastPrice']) if ticker else 0
             
-            # Compile detected patterns
+            # Compile detected patterns with entry prices
             detected_patterns = []
             for tf, result in mtf_analysis['timeframe_results'].items():
                 for pattern_name, pattern_data in result.get('pattern_signals', {}).items():
-                    detected_patterns.append({
+                    pattern_info = {
                         'name': f"{pattern_name} ({tf})",
                         'signal': pattern_data['signal'],
-                        'confidence': pattern_data['confidence']
-                    })
+                        'confidence': pattern_data['confidence'],
+                        'status': pattern_data.get('status', 'none'),
+                        'entry_price': pattern_data.get('entry_price'),
+                        'stop_loss': pattern_data.get('stop_loss'),
+                        'take_profit': pattern_data.get('take_profit'),
+                        'breakout_level': pattern_data.get('breakout_level')
+                    }
+                    detected_patterns.append(pattern_info)
+            
+            # Sort patterns: 'ready' status first, then by confidence
+            detected_patterns.sort(
+                key=lambda x: (
+                    0 if x.get('status') == 'ready' else 1 if x.get('status') == 'forming' else 2,
+                    -x['confidence']
+                )
+            )
             
             # Get indicator signals from the primary timeframe (1h or first available)
             primary_tf = '1h' if '1h' in timeframe_data else list(timeframe_data.keys())[0]

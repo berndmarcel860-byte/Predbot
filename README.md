@@ -136,7 +136,7 @@ asyncio.run(single_scan())
 
 📊 Signal: LONG
 💪 Strength: 78.5%
-💰 Price: $42,500.00
+💰 Current Price: $42,500.00
 ⏰ Time: 2024-01-15 14:30:00 UTC
 
 📈 Timeframe Analysis:
@@ -153,11 +153,32 @@ asyncio.run(single_scan())
   🟢 STOCHASTIC: BUY
 
 📐 Patterns Detected:
-  🟢 double_bottom: 85% confidence
-  🟢 ascending_triangle: 70% confidence
+  🟢 ascending_triangle (1h): READY (78%)
+     📍 Entry: $42,650.00
+     🛑 Stop Loss: $41,800.00
+     🎯 Take Profit: $44,200.00
+     ⚡ Breakout Level: $42,600.00
+  🟢 double_bottom (4h): FORMING (65%)
+     📍 Entry: $42,100.00
+     🛑 Stop Loss: $40,500.00
+     🎯 Take Profit: $44,500.00
 
 ⚠️ This is not financial advice. Always do your own research.
 ```
+
+## Pattern Detection
+
+The bot detects patterns **before breakout** to provide early entry opportunities:
+
+- **FORMING**: Pattern is developing, watch for confirmation
+- **READY**: Pattern complete, price approaching breakout level - optimal entry zone
+- **CONFIRMED**: Breakout has occurred, can still enter on retest
+
+Each pattern signal includes:
+- **Entry Price**: Recommended entry level
+- **Stop Loss**: Risk management level
+- **Take Profit**: Target price based on pattern projection
+- **Breakout Level**: Key price level to watch
 
 ## Project Structure
 

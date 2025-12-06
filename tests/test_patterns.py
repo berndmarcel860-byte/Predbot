@@ -101,22 +101,32 @@ class TestChartPatterns:
         assert all(0 <= l < len(sample_ohlcv_data) for l in lows)
     
     def test_detect_double_top_structure(self, sample_ohlcv_data):
-        """Test double top detection returns correct structure."""
+        """Test double top detection returns correct structure with entry levels."""
         result = ChartPatterns.detect_double_top(sample_ohlcv_data)
         
         assert 'detected' in result
         assert 'signal' in result
         assert 'confidence' in result
+        assert 'status' in result
+        assert 'entry_price' in result
+        assert 'stop_loss' in result
+        assert 'take_profit' in result
+        assert 'breakout_level' in result
         assert isinstance(result['detected'], bool)
         assert result['signal'] in [-1, 0, 1]
+        assert result['status'] in ['none', 'forming', 'ready', 'confirmed']
     
     def test_detect_double_bottom_structure(self, sample_ohlcv_data):
-        """Test double bottom detection returns correct structure."""
+        """Test double bottom detection returns correct structure with entry levels."""
         result = ChartPatterns.detect_double_bottom(sample_ohlcv_data)
         
         assert 'detected' in result
         assert 'signal' in result
         assert 'confidence' in result
+        assert 'status' in result
+        assert 'entry_price' in result
+        assert 'stop_loss' in result
+        assert 'take_profit' in result
     
     def test_detect_head_and_shoulders_structure(self, sample_ohlcv_data):
         """Test head and shoulders detection returns correct structure."""
@@ -198,15 +208,21 @@ class TestChartPatterns:
             assert pattern in patterns
     
     def test_get_pattern_signals(self, sample_ohlcv_data):
-        """Test getting signals from detected patterns."""
+        """Test getting signals from detected patterns with entry levels."""
         signals = ChartPatterns.get_pattern_signals(sample_ohlcv_data)
         
         # Signals should only contain detected patterns
         for name, data in signals.items():
             assert 'signal' in data
             assert 'confidence' in data
+            assert 'status' in data
+            assert 'entry_price' in data
+            assert 'stop_loss' in data
+            assert 'take_profit' in data
+            assert 'breakout_level' in data
             assert data['signal'] in [-1, 0, 1]
             assert 0 <= data['confidence'] <= 100
+            assert data['status'] in ['none', 'forming', 'ready', 'confirmed']
     
     def test_empty_dataframe(self):
         """Test handling of empty DataFrame."""
